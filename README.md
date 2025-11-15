@@ -809,7 +809,6 @@ Special thanks to the open-source community for incredible tools and libraries t
 ## 📞 Contact Information
 
 ### Get in Touch
-- **Email:** deepak@ruralhealthcare.com
 - - **GitHub:** [It-iandeepak](https://github.com/It-iandeepak)
 - - **LinkedIn:** https://www.linkedin.com/in/deepak-kumar-18999232b/
 - - **Email:** ankit26548k@gmail.com
