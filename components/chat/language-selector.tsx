@@ -13,7 +13,8 @@ export type SupportedLanguage =
   | 'ur-IN'
   | 'kn-IN'
   | 'ml-IN'
-  | 'ne-NP';
+  | 'ne-NP'
+  | 'hi-CG';
 
 export const LANGUAGE_MAP: Record<SupportedLanguage, string> = {
   'en-US': 'English',
@@ -27,6 +28,7 @@ export const LANGUAGE_MAP: Record<SupportedLanguage, string> = {
   'kn-IN': 'Kannada',
   'ml-IN': 'Malayalam',
   'ne-NP': 'Nepali',
+  'hi-CG': 'Chhattisgarhi',
 };
 
 interface LanguageSelectorProps {
