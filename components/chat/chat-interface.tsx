@@ -1,8 +1,12 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { Mic, MicOff, Send, Plus, Trash2 } from 'lucide-react';
 import { useGeminiChat, Message as ChatMessage } from '@/hooks/use-gemini-chat';
 import { LanguageSelector, type SupportedLanguage } from './language-selector';
+
+// Type for speech recognition
+type SpeechRecognitionType = typeof window.SpeechRecognition | typeof window.webkitSpeechRecognition;
 
 interface Chat {
   id: string;
@@ -14,6 +18,9 @@ interface Chat {
 export default function ChatInterface({ onBack }: { onBack?: () => void }) {
   const { messages: hookMessages, isLoading, error, sendMessage, clearError } = useGeminiChat();
   const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>('en-US');
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const recognitionRef = useRef<InstanceType<SpeechRecognitionType> | null>(null);
   
   const [chats, setChats] = useState<Chat[]>([
     {
@@ -45,10 +52,106 @@ export default function ChatInterface({ onBack }: { onBack?: () => void }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeChat?.messages]);
 
+  // Initialize Speech Recognition
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognitionAPI = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognitionAPI) {
+      setSpeechSupported(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognitionAPI();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = selectedLanguage;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        setInput((prev) => prev + finalTranscript);
+      } else if (interimTranscript) {
+        // Show interim results in the input field temporarily
+        setInput(interimTranscript);
+      }
+    };
+
+    recognition.onerror = (event: SpeechRecognitionEvent) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, [selectedLanguage]);
+
+  // Update recognition language when selected language changes
+  useEffect(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.lang = selectedLanguage;
+    }
+  }, [selectedLanguage]);
+
   const handleSendMessage = () => {
     if (!input.trim()) return;
     sendMessage(input);
     setInput('');
+  };
+
+  const startListening = () => {
+    if (!speechSupported || !recognitionRef.current) {
+      setError('Speech recognition is not supported in your browser. Please try Chrome, Edge, or Safari.');
+      return;
+    }
+
+    try {
+      recognitionRef.current.start();
+    } catch (err) {
+      console.error('Error starting speech recognition:', err);
+      setError('Could not start speech recognition. Please try again.');
+    }
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.abort();
+      setIsListening(false);
+    }
+  };
+
+  const handleMicClick = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
   };
 
   const createNewChat = () => {
@@ -215,25 +318,43 @@ export default function ChatInterface({ onBack }: { onBack?: () => void }) {
 
           {/* Text Input */}
           <div className="flex gap-3">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              placeholder="Ask me anything about your health... (Shift+Enter for new line)"
-              disabled={isLoading}
-              rows={2}
-              className="flex-1 px-4 py-3 rounded-lg bg-background border-2 border-border text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed resize-none"
-            />
+            <div className="flex-1 relative">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder={isListening ? "Listening..." : "Ask me anything about your health... (Shift+Enter for new line)"}
+                disabled={isLoading}
+                rows={2}
+                className="w-full px-4 py-3 rounded-lg bg-background border-2 border-border text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed resize-none pr-12"
+              />
+              {/* Mic Button */}
+              <button
+                onClick={handleMicClick}
+                disabled={isLoading || !speechSupported}
+                title={speechSupported ? (isListening ? "Stop listening" : "Start listening") : "Speech recognition not supported"}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-md transition-all ${
+                  isListening
+                    ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 animate-pulse"
+                    : speechSupported
+                    ? "text-muted-foreground hover:bg-muted"
+                    : "text-muted-foreground/50 cursor-not-allowed"
+                }`}
+              >
+                {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+              </button>
+            </div>
             <button
               onClick={handleSendMessage}
               disabled={!input.trim() || isLoading}
-              className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-bold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all self-end"
+              className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-bold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all self-end flex items-center gap-2"
             >
+              <Send size={18} />
               Send
             </button>
           </div>
