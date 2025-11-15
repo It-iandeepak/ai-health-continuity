@@ -21,6 +21,7 @@ export default function ChatInterface({ onBack }: { onBack?: () => void }) {
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
   const recognitionRef = useRef<InstanceType<SpeechRecognitionType> | null>(null);
+  const transcriptRef = useRef<string>('');
   
   const [chats, setChats] = useState<Chat[]>([
     {
@@ -74,24 +75,22 @@ export default function ChatInterface({ onBack }: { onBack?: () => void }) {
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interimTranscript = '';
-      let finalTranscript = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
 
         if (event.results[i].isFinal) {
-          finalTranscript += transcript + ' ';
+          // For final results, append only if not already added
+          if (!transcriptRef.current.includes(transcript)) {
+            transcriptRef.current += transcript + ' ';
+          }
         } else {
           interimTranscript += transcript;
         }
       }
 
-      if (finalTranscript) {
-        setInput((prev) => prev + finalTranscript);
-      } else if (interimTranscript) {
-        // Show interim results in the input field temporarily
-        setInput(interimTranscript);
-      }
+      // Update input field with cumulative transcript
+      setInput(transcriptRef.current + interimTranscript);
     };
 
     recognition.onerror = (event: SpeechRecognitionEvent) => {
@@ -132,6 +131,8 @@ export default function ChatInterface({ onBack }: { onBack?: () => void }) {
     }
 
     try {
+      // Reset transcript for new session
+      transcriptRef.current = '';
       recognitionRef.current.start();
     } catch (err) {
       console.error('Error starting speech recognition:', err);
